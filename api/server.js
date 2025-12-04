@@ -7,6 +7,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy (for Cloudflare/Nginx)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -49,6 +52,35 @@ app.get('/api/health', (req, res) => {
         contract: process.env.AIRDROP_CONTRACT,
         timestamp: new Date().toISOString()
     });
+});
+
+// Check status - used by frontend (returns all needed data)
+app.get('/api/check-status/:address', async (req, res) => {
+    try {
+        const { address } = req.params;
+
+        if (!ethers.isAddress(address)) {
+            return res.status(400).json({ error: 'Invalid address' });
+        }
+
+        const [hasClaimed, claimAmount, totalClaims, maxClaims] = await Promise.all([
+            airdropContract.hasClaimed(address),
+            airdropContract.CLAIM_AMOUNT(),
+            airdropContract.totalClaims(),
+            airdropContract.MAX_CLAIMS()
+        ]);
+
+        res.json({
+            address,
+            hasClaimed,
+            claimAmount: Number(ethers.formatEther(claimAmount)).toLocaleString(),
+            totalClaims: totalClaims.toString(),
+            maxClaims: maxClaims.toString()
+        });
+    } catch (error) {
+        console.error('Error checking status:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Check eligibility
